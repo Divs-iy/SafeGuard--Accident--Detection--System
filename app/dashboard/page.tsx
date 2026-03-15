@@ -22,7 +22,9 @@ import {
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { SensorMonitor } from "@/components/sensor-monitor"
 import { LocationTracker } from "@/components/location-tracker"
-import { EmergencyButton } from "@/components/emergency-button"
+import EmergencyButton  from "@/components/emergency-button"
+import { useRef } from "react"
+
 
 export default function DriverDashboard() {
   const [isMonitoring, setIsMonitoring] = useState(true)
@@ -30,13 +32,27 @@ export default function DriverDashboard() {
   const [gpsAccuracy, setGpsAccuracy] = useState(95)
   const [lastUpdate, setLastUpdate] = useState(new Date())
   const [isSimulating, setIsSimulating] = useState(false)
-const [countdown, setCountdown] = useState(5)
+  const [crashLock, setCrashLock] = useState(false)
+  const [showCancel, setShowCancel] = useState(false)
+  const [countdown, setCountdown] = useState(5)
 const [alertSent, setAlertSent] = useState(false)
+const [impactCount, setImpactCount] = useState(0)
+const alarmRef = useRef<HTMLAudioElement | null>(null)
+const [motionHits, setMotionHits] = useState(0)
 const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null)
+
+// useEffect(() => {
+//   const loggedIn = localStorage.getItem("driverLoggedIn")
+
+//   if (!loggedIn) {
+//     window.location.href = "/login"
+//   }
+// }, [])
 
 
   // Simulate real-time updates
   useEffect(() => {
+    if(!isMonitoring) return;
     const interval = setInterval(() => {
       setBatteryLevel((prev) => Math.max(20, prev - Math.random() * 0.5))
       setGpsAccuracy((prev) => 90 + Math.random() * 10)
@@ -45,6 +61,58 @@ const [location, setLocation] = useState<{ lat: number; lon: number } | null>(nu
 
     return () => clearInterval(interval)
   }, [])
+  useEffect(() => {  //sensors
+  const handleMotion = (event: DeviceMotionEvent) => {
+    const acc = event.accelerationIncludingGravity;
+    const rot = event.rotationRate;
+
+    if (!acc || !rot) return;
+
+      const x = acc.x ?? 0
+      const y = acc.y ?? 0
+      const z = acc.z ?? 0
+      const gForce = Math.sqrt(x*x + y*y + z*z)
+    
+    const rotation =
+      Math.abs(rot.alpha || 0) +
+      Math.abs(rot.beta || 0) +
+      Math.abs(rot.gamma || 0);
+
+    console.log("Acceleration:", gForce);
+    console.log("Rotation:", rotation);
+
+    if (gForce > 30 && rotation > 32 && !crashLock) {
+  console.log("Crash detected!");
+  setMotionHits((prev) => prev + 1)
+  if(motionHits >= 2){
+    console.log("crash confirmed");
+  }
+  setImpactCount((prev) => prev + 1)
+  if(impactCount >=1){
+    console.log("crash confirmed");
+  }
+  setTimeout(() => {
+  setImpactCount(0)
+}, 1200)
+
+  setCrashLock(true);
+  handleSimulateAlert();
+  if (navigator.vibrate) {
+  navigator.vibrate([500, 200, 500, 200, 500])
+}
+
+  setTimeout(() => {
+    setCrashLock(false);
+  }, 20000)
+}
+  }
+
+  window.addEventListener("devicemotion", handleMotion);
+
+  return () => {
+    window.removeEventListener("devicemotion", handleMotion);
+  };
+}, [crashLock]);
 
   const handleToggleMonitoring = () => {
     setIsMonitoring(!isMonitoring)
@@ -53,28 +121,65 @@ const [location, setLocation] = useState<{ lat: number; lon: number } | null>(nu
   setIsSimulating(true)
   setAlertSent(false)
   setCountdown(5)
+  const alarm = new Audio("/alarm.wav")
+  alarm.loop = true
+  alarm.play()
 
-  const timer = setInterval(() => {
-    setCountdown((prev) => {
-      if (prev === 1) {
-        clearInterval(timer)
-        sendAlert()
-      }
-      return prev - 1
-    })
-  }, 1000)
+  alarmRef.current = alarm
+  
+  }
+  useEffect(() => {
+  if (!isSimulating) return;
+
+  if (countdown <= 0) {
+    sendAlert(); // your SMS function
+    setAlertSent(true);
+    setIsSimulating(false);
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    setCountdown((prev) => prev - 1);
+  }, 1000);
+
+  return () => clearTimeout(timer);
+
+}, [countdown, isSimulating]);
+
+const cancelAlert = () => {
+  setIsSimulating(false);
+  setCountdown(5);
+  if (alarmRef.current) {
+    alarmRef.current.pause()
+    alarmRef.current.currentTime = 0
+  }
+  console.log("False alert cancelled");
 }
-
-const sendAlert = () => {
+const sendAlert = async() => {
   setIsSimulating(false)
   setAlertSent(true)
-
+  if (alarmRef.current) {
+  alarmRef.current.pause()
+  alarmRef.current.currentTime = 0
+}
+// SEND SMS
+  //await fetch("/api/send-sms", { method: "POST" }) //aaaaaaa- sms line!!!
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition((pos) => {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const lat = pos.coords.latitude
+      const lon = pos.coords.longitude
       setLocation({
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
+        lat: lat,
+        lon: lon,
       })
+      //sms with location
+      await fetch("/api/send-sms", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ lat, lon }),
+    })
     })
   }
 }
@@ -157,6 +262,7 @@ const sendAlert = () => {
               <CardDescription>Quick access to emergency features</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              
               <Button
   className="w-full"
   variant="destructive"
@@ -165,6 +271,18 @@ const sendAlert = () => {
 >
   {isSimulating ? `Sending alert in ${countdown}s` : "Simulate Alert"}
 </Button>
+{isSimulating && (
+        <div className="fixed inset-0 bg-red-600 bg-opacity-100 flex flex-col items-center justify-center text-white z-50 text-center p-6 animate-fade">
+
+          <h2>🚨Crash Detected</h2>
+          <p>Sending alert in {countdown}s</p>
+
+          <button onClick={cancelAlert} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold text-lg py-3 rounded-xl shadow-lg"
+          >
+            I'm Safe
+          </button>
+        </div>
+      )}
 
 {alertSent && (
   <div className="text-sm text-muted-foreground space-y-1">
@@ -292,4 +410,4 @@ const sendAlert = () => {
       </div>
     </DashboardLayout>
   )
-}
+};

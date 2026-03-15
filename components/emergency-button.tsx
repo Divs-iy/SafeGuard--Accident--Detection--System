@@ -1,69 +1,36 @@
-"use client"
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { AlertTriangle } from "lucide-react"
-import { cn } from "@/lib/utils"
+"use client";
 
-export function EmergencyButton({
-  onAlert,
-}: {
-  onAlert: (location: { lat: number; lon: number }) => void
-}) {
-  const [isPressed, setIsPressed] = useState(false)
-  const [countdown, setCountdown] = useState(0)
+export default function EmergencyButton() {
 
-  const handleEmergencyPress = () => {
-    if (isPressed) return
+  const sendEmergency = async () => {
+    console.log("BUTTON CLICKED");
 
-    setIsPressed(true)
-    setCountdown(10)
+    try {
 
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          setIsPressed(false)
+      const res = await fetch("/api/send-sms", {
+        method: "POST",
+      });
 
-          // 🔹 send location ONLY here
-          onAlert({
-            lat: 23.0225,
-            lon: 72.5714,
-          })
+      const data = await res.json();
 
-          alert("Emergency alert sent to all contacts!")
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }
+      console.log(data);
 
-  const handleCancel = () => {
-    setIsPressed(false)
-    setCountdown(0)
-  }
+      if (data.success) {
+        alert("🚨 Emergency SMS Sent!");
+      }
+
+    } catch (err) {
+      console.error("SMS error:", err);
+    }
+
+  };
 
   return (
-    <div className="space-y-3">
-      <Button
-        onClick={handleEmergencyPress}
-        disabled={isPressed}
-        className={cn(
-          "w-full h-16 text-lg font-semibold",
-          isPressed
-            ? "bg-destructive hover:bg-destructive animate-pulse"
-            : "bg-destructive hover:bg-destructive/90",
-        )}
-      >
-        <AlertTriangle className="h-6 w-6 mr-2" />
-        {isPressed ? `Sending Alert... ${countdown}s` : "Simulate Alert"}
-      </Button>
-
-      {isPressed && (
-        <Button onClick={handleCancel} variant="outline" className="w-full bg-transparent">
-          Cancel Alert
-        </Button>
-      )}
-    </div>
-  )
+    <button
+      onClick={sendEmergency}
+      className="bg-red-600 text-white px-6 py-3 rounded-lg"
+    >
+      🚨 Emergency Alert
+    </button>
+  );
 }
