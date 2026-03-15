@@ -98,7 +98,7 @@ SafeGuard-Accident-Detection-System
 
 A demonstration of the SafeGuard accident detection workflow and emergency alert system.
 
-🎥 Demo Video: https://drive.google.com/https://drive.google.com/(https://drive.google.com/file/d/1CU98NN9azPCdPIl6ET8aM9CRaEw9sGn8/view?usp=sharing)
+🎥 Demo Video: (https://drive.google.com/file/d/1CU98NN9azPCdPIl6ET8aM9CRaEw9sGn8/view?usp=sharing)
 
 
 ## Performance and Testing
